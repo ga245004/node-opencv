@@ -125,6 +125,8 @@ void Matrix::Init(Local<Object> target) {
   Nan::SetPrototypeMethod(ctor, "compare", Compare);
   Nan::SetPrototypeMethod(ctor, "mul", Mul);
 
+  Nan::SetPrototypeMethod(ctor, "morphologyEx", MORPHOLOGYEX);
+
   target->Set(Nan::New("Matrix").ToLocalChecked(), ctor->GetFunction());
 };
 
@@ -3118,5 +3120,71 @@ NAN_METHOD(Matrix::Mul) {
   m_out->mat = res;
 
   info.GetReturnValue().Set(out);
+  return;
+}
+
+NAN_METHOD(Matrix::MORPHOLOGYEX) {
+  SETUP_FUNCTION(Matrix)
+
+  if (info.Length() != 2) {
+    Nan::ThrowTypeError("Invalid number of arguments");
+  }
+  int op = cv::MORPH_OPEN;
+  Nan::Utf8String typstr(info[0]);
+
+  if (strcmp(*typstr, "Open") == 0) {
+    // Uses default value
+  }
+  else if (strcmp(*typstr, "Close") == 0) {
+    op = cv::MORPH_CLOSE;
+  }
+  else if (strcmp(*typstr, "Gradient") == 0) {
+    op = cv::MORPH_GRADIENT;
+  }
+  else if (strcmp(*typstr, "Top Hat") == 0) {
+    op = cv::MORPH_TOPHAT;
+  }
+  else if (strcmp(*typstr, "Black Hat") == 0) {
+    op = cv::MORPH_BLACKHAT;
+  }
+  else if (strcmp(*typstr, "Hit and Miss") == 0) {
+    op = cv::MORPH_HITMISS;
+  }
+  else {
+    char *typeString = *typstr;
+    char text[] = "\" is no supported morphological operation. "
+       "Use \"Open\" (default), \"Close\", "
+      "\"Gradient\", \"Top Hat\", \"Black Hat\" "
+       "or \"Hit and Miss\"";
+    char *errorMessage;
+    errorMessage = new char[strlen(typeString) + strlen(text) + 2];
+    strcpy(errorMessage, "\"");
+    strcat(errorMessage, typeString);
+    strcat(errorMessage, text);
+
+    Nan::ThrowError(errorMessage);
+    return;
+  }
+
+  Matrix* m0 = Nan::ObjectWrap::Unwrap<Matrix>(info[1]->ToObject());
+  cv::Mat kernel = m0->mat;
+
+  int iterations = 1;
+  if (info.Length() > 2) {
+    if (!info[2]->IsNumber()) {
+      JSTHROW_TYPE("'iterations' argument must be a number");
+    }
+    iterations = info[2]->NumberValue();
+  }
+
+  Local < Object > img_to_return =
+      Nan::NewInstance(Nan::GetFunction(Nan::New(Matrix::constructor)).ToLocalChecked()).ToLocalChecked();
+  Matrix *img = Nan::ObjectWrap::Unwrap<Matrix>(img_to_return);
+  self->mat.copyTo(img->mat);
+
+  cv::morphologyEx(self->mat, img->mat, op, kernel);
+
+  info.GetReturnValue().Set(img_to_return);
+
   return;
 }
